@@ -1,6 +1,24 @@
 import warnings
 warnings.filterwarnings("ignore")
 
+import threading
+import os
+from flask import Flask
+
+# Lura Render med en dummy-webbserver
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Boten är igång!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+# Starta webbservern i en egen tråd
+threading.Thread(target=run_flask, daemon=True).start()
+
 import yfinance as yf
 import pandas as pd
 import time
@@ -12,6 +30,7 @@ from google import genai
 GEMINI_API_KEY = "AQ.Ab8RN6Ltxf7nHve5zqN7tFlG1JmYrJ-miL3sERLiqAgi0cuotA"
 STARTKAPITAL = 200000.0
 
+# KLISTRA IN DIN TOKEN FRÅN BOTFATHER HÄR INOM CITATTECKNEN:
 TELEGRAM_TOKEN = "8977093798 : AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
 TELEGRAM_CHAT_ID = "6873331016"
 
@@ -23,13 +42,13 @@ SVENSKA_AKTIER = [
 # =================================================
 
 def skicka_telegram_notis(meddelande):
-    if "DIN_TELEGRAM_TOKEN" not in TELEGRAM_TOKEN and TELEGRAM_TOKEN != "":
+    if TELEGRAM_TOKEN != "DIN_TELEGRAM_TOKEN_HÄR" and TELEGRAM_TOKEN != "":
         try:
             url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
             payload = {"chat_id": TELEGRAM_CHAT_ID, "text": meddelande}
             requests.post(url, data=payload, timeout=5)
         except Exception as e:
-            print(f"Kunde inte skicka Telegram-notis: {e}")
+            print(f"Kunde inte skicka Telegram-notis: {e}", flush=True)
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 kassa = STARTKAPITAL
@@ -82,7 +101,7 @@ while True:
     
     for ticker in SVENSKA_AKTIER:
         try:
-            time.sleep(1)  # Förhindrar 'Rate Limit' från Yahoo Finance
+            time.sleep(1.5)
             data = yf.download(tickers=ticker, period="1d", interval="1m", progress=False)
             
             if not data.empty and 'Close' in data:
