@@ -10,9 +10,8 @@ from google import genai
 
 # ================= INSTÄLLNINGAR =================
 GEMINI_API_KEY = "AQ.Ab8RN6Ltxf7nHve5zqN7tFlG1JmYrJ-miL3sERLiqAgi0cuotA"
-STARTKAPITAL = 200000.0  # Din virtuella startsumma i SEK
+STARTKAPITAL = 200000.0
 
-# Telegram-inställningar
 TELEGRAM_TOKEN = "DIN_TELEGRAM_TOKEN_HÄR"
 TELEGRAM_CHAT_ID = "DITT_CHAT_ID_HÄR"
 
@@ -75,18 +74,19 @@ def utvärdera_aktie_med_gemini(ticker, pris, rsi, nyhet_titel, tillgänglig_kas
         return f"FEL: {e}"
 
 skicka_telegram_notis(f"🚀 AI-Boten har startats på Render med {STARTKAPITAL:,.2f} SEK i kassan!")
-print(f"Bot startad på Render! Startkapital: {STARTKAPITAL:,.2f} SEK | Bevakar {len(SVENSKA_AKTIER)} aktier\n")
+print(f"Bot startad på Render! Startkapital: {STARTKAPITAL:,.2f} SEK | Bevakar {len(SVENSKA_AKTIER)} aktier\n", flush=True)
 
 while True:
     nu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{nu}] Analyserar marknad via Gemini... (Kassa: {kassa:,.2f} SEK)")
+    print(f"[{nu}] Analyserar marknad via Gemini... (Kassa: {kassa:,.2f} SEK)", flush=True)
     
-    try:
-        data = yf.download(tickers=SVENSKA_AKTIER, period="1d", interval="1m", progress=False)
-        
-        for ticker in SVENSKA_AKTIER:
-            try:
-                df_aktie = data['Close'][ticker].dropna()
+    for ticker in SVENSKA_AKTIER:
+        try:
+            time.sleep(1)  # Förhindrar 'Rate Limit' från Yahoo Finance
+            data = yf.download(tickers=ticker, period="1d", interval="1m", progress=False)
+            
+            if not data.empty and 'Close' in data:
+                df_aktie = data['Close'].dropna()
                 
                 if len(df_aktie) > 15:
                     senaste_pris = float(df_aktie.iloc[-1])
@@ -126,7 +126,7 @@ while True:
                                     f"Analys: {motivering.strip()}\n"
                                     f"Kassa kvar: {kassa:,.2f} SEK"
                                 )
-                                print(meddelande)
+                                print(meddelande, flush=True)
                                 skicka_telegram_notis(meddelande)
 
                         elif betyg <= 3 and ticker in portfölj:
@@ -147,12 +147,10 @@ while True:
                                 f"Analys: {motivering.strip()}\n"
                                 f"Ny kassa: {kassa:,.2f} SEK"
                             )
-                            print(meddelande)
+                            print(meddelande, flush=True)
                             skicka_telegram_notis(meddelande)
 
-            except Exception:
-                continue
-    except Exception as e:
-        print(f"Ett fel uppstod i loopen: {e}")
+        except Exception as e:
+            continue
 
     time.sleep(180)
