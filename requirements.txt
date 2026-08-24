@@ -1,0 +1,4 @@
+google-genai
+yfinance
+pandas
+requests
