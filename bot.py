@@ -5,7 +5,7 @@ import threading
 import os
 from flask import Flask
 
-# Lura Render med en dummy-webbserver
+# Lura Render med en dummy-webbserver så att gratis Web Service förblir igång
 app = Flask(__name__)
 
 @app.route('/')
@@ -30,8 +30,7 @@ from google import genai
 GEMINI_API_KEY = "AQ.Ab8RN6Ltxf7nHve5zqN7tFlG1JmYrJ-miL3sERLiqAgi0cuotA"
 STARTKAPITAL = 200000.0
 
-# KLISTRA IN DIN TOKEN FRÅN BOTFATHER HÄR INOM CITATTECKNEN:
-TELEGRAM_TOKEN = "8977093798 : AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
+TELEGRAM_TOKEN = "8977093798:AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
 TELEGRAM_CHAT_ID = "6873331016"
 
 SVENSKA_AKTIER = [
@@ -42,7 +41,7 @@ SVENSKA_AKTIER = [
 # =================================================
 
 def skicka_telegram_notis(meddelande):
-    if TELEGRAM_TOKEN != "DIN_TELEGRAM_TOKEN_HÄR" and TELEGRAM_TOKEN != "":
+    if TELEGRAM_TOKEN != "" and TELEGRAM_CHAT_ID != "":
         try:
             url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
             payload = {"chat_id": TELEGRAM_CHAT_ID, "text": meddelande}
