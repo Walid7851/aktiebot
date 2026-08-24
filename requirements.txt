@@ -2,3 +2,4 @@ google-genai
 yfinance
 pandas
 requests
+flask
