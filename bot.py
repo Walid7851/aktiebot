@@ -36,7 +36,8 @@ TELEGRAM_CHAT_ID = "6873331016"
 SVENSKA_AKTIER = [
     "VOLV-B.ST", "ERIC-B.ST", "INVE-B.ST", "ATCO-A.ST", "HM-B.ST",
     "SEB-A.ST", "SAND.ST", "EVO.ST", "NIBE-B.ST", "TELIA.ST",
-    "EQT.ST", "SKF-B.ST", "TREL-B.ST"
+    "EQT.ST", "SKF-B.ST", "TREL-B.ST", "ASSA-B.ST", "ABB.ST",
+    "AZN.ST", "ALFA.ST", "BIOA-B.ST", "XVIVO.ST"
 ]
 # =================================================
 
