@@ -5,7 +5,7 @@ import threading
 import os
 from flask import Flask
 
-# Lura Render med en dummy-webbserver så att gratis Web Service förblir igång
+# Lura Render med en dummy-webbserver
 app = Flask(__name__)
 
 @app.route('/')
@@ -16,7 +16,6 @@ def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# Starta webbservern i en egen tråd
 threading.Thread(target=run_flask, daemon=True).start()
 
 import yfinance as yf
@@ -101,7 +100,8 @@ while True:
     
     for ticker in SVENSKA_AKTIER:
         try:
-            time.sleep(1.5)
+            # Pausa 3 sekunder mellan varje aktie för att undvika YFRateLimitError
+            time.sleep(3)
             data = yf.download(tickers=ticker, period="1d", interval="1m", progress=False)
             
             if not data.empty and 'Close' in data:
@@ -112,9 +112,12 @@ while True:
                     df_temp = pd.DataFrame({'Close': df_aktie})
                     rsi = beräkna_rsi(df_temp)
                     
-                    objekt = yf.Ticker(ticker)
-                    nyheter = objekt.news
-                    senaste_nyhet = nyheter[0].get('title', 'Inga färska nyheter') if nyheter else 'Inga färska nyheter'
+                    try:
+                        objekt = yf.Ticker(ticker)
+                        nyheter = objekt.news
+                        senaste_nyhet = nyheter[0].get('title', 'Inga färska nyheter') if nyheter else 'Inga färska nyheter'
+                    except Exception:
+                        senaste_nyhet = 'Inga färska nyheter'
                     
                     ai_svar = utvärdera_aktie_med_gemini(ticker, senaste_pris, rsi, senaste_nyhet, kassa)
                     
@@ -170,6 +173,9 @@ while True:
                             skicka_telegram_notis(meddelande)
 
         except Exception as e:
+            # Om vi blir spärrade, pausa 10 sekunder
+            time.sleep(10)
             continue
 
-    time.sleep(180)
+    # Paus på 5 minuter mellan varje helomgång
+    time.sleep(300)
