@@ -23,6 +23,7 @@ import pandas as pd
 import time
 import requests
 from datetime import datetime
+import pytz
 from google import genai
 
 # ================= INSTÄLLNINGAR =================
@@ -39,6 +40,19 @@ SVENSKA_AKTIER = [
     "AZN.ST", "ALFA.ST", "BIOA-B.ST", "XVIVO.ST"
 ]
 # =================================================
+
+def är_börsen_öppen():
+    tz = pytz.timezone('Europe/Stockholm')
+    nu = datetime.now(tz)
+    
+    # 0 = Måndag, 4 = Fredag, 5 = Lördag, 6 = Söndag
+    if nu.weekday() >= 5:
+        return False
+    
+    starttid = nu.replace(hour=9, minute=0, second=0, microsecond=0)
+    sluttid = nu.replace(hour=17, minute=30, second=0, microsecond=0)
+    
+    return starttid <= nu <= sluttid
 
 def skicka_telegram_notis(meddelande):
     if TELEGRAM_TOKEN != "" and TELEGRAM_CHAT_ID != "":
@@ -94,13 +108,20 @@ def utvärdera_aktie_med_gemini(ticker, pris, rsi, nyhet_titel, tillgänglig_kas
 skicka_telegram_notis(f"🚀 AI-Boten har startats på Render med {STARTKAPITAL:,.2f} SEK i kassan!")
 print(f"Bot startad på Render! Startkapital: {STARTKAPITAL:,.2f} SEK | Bevakar {len(SVENSKA_AKTIER)} aktier\n", flush=True)
 
+tz = pytz.timezone('Europe/Stockholm')
+
 while True:
-    nu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if not är_börsen_öppen():
+        nu_str = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{nu_str}] Börsen är stängd. Boten pausar i 15 minuter...", flush=True)
+        time.sleep(900)
+        continue
+
+    nu = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{nu}] Analyserar marknad via Gemini... (Kassa: {kassa:,.2f} SEK)", flush=True)
     
     for ticker in SVENSKA_AKTIER:
         try:
-            # Pausa 3 sekunder mellan varje aktie för att undvika YFRateLimitError
             time.sleep(3)
             data = yf.download(tickers=ticker, period="1d", interval="1m", progress=False)
             
@@ -173,9 +194,7 @@ while True:
                             skicka_telegram_notis(meddelande)
 
         except Exception as e:
-            # Om vi blir spärrade, pausa 10 sekunder
             time.sleep(10)
             continue
 
-    # Paus på 5 minuter mellan varje helomgång
     time.sleep(300)
