@@ -3,9 +3,9 @@ warnings.filterwarnings("ignore")
 
 import threading
 import os
+import random
 from flask import Flask
 
-# Lura Render med en dummy-webbserver
 app = Flask(__name__)
 
 @app.route('/')
@@ -45,7 +45,6 @@ def är_börsen_öppen():
     tz = pytz.timezone('Europe/Stockholm')
     nu = datetime.now(tz)
     
-    # 0 = Måndag, 4 = Fredag, 5 = Lördag, 6 = Söndag
     if nu.weekday() >= 5:
         return False
     
@@ -122,8 +121,9 @@ while True:
     
     for ticker in SVENSKA_AKTIER:
         try:
-            time.sleep(3)
-            data = yf.download(tickers=ticker, period="1d", interval="1m", progress=False)
+            time.sleep(random.uniform(3.0, 5.0))
+            objekt = yf.Ticker(ticker)
+            data = objekt.history(period="5d", interval="5m")
             
             if not data.empty and 'Close' in data:
                 df_aktie = data['Close'].dropna()
@@ -134,7 +134,6 @@ while True:
                     rsi = beräkna_rsi(df_temp)
                     
                     try:
-                        objekt = yf.Ticker(ticker)
                         nyheter = objekt.news
                         senaste_nyhet = nyheter[0].get('title', 'Inga färska nyheter') if nyheter else 'Inga färska nyheter'
                     except Exception:
@@ -194,7 +193,7 @@ while True:
                             skicka_telegram_notis(meddelande)
 
         except Exception as e:
-            time.sleep(10)
+            time.sleep(5)
             continue
 
     time.sleep(300)
