@@ -121,7 +121,7 @@ while True:
     
     for ticker in SVENSKA_AKTIER:
         try:
-            time.sleep(random.uniform(3.0, 5.0))
+            time.sleep(random.uniform(2.0, 4.0))
             objekt = yf.Ticker(ticker)
             data = objekt.history(period="5d", interval="5m")
             
@@ -133,11 +133,17 @@ while True:
                     df_temp = pd.DataFrame({'Close': df_aktie})
                     rsi = beräkna_rsi(df_temp)
                     
+                    senaste_nyhet = "Inga färska nyheter"
                     try:
-                        nyheter = objekt.news
-                        senaste_nyhet = nyheter[0].get('title', 'Inga färska nyheter') if nyheter else 'Inga färska nyheter'
+                        nyheter = objekt.get_news()
+                        if nyheter and len(nyheter) > 0:
+                            farskt_objekt = nyheter[0]
+                            if 'content' in farskt_objekt and 'title' in farskt_objekt['content']:
+                                senaste_nyhet = farskt_objekt['content']['title']
+                            elif 'title' in farskt_objekt:
+                                senaste_nyhet = farskt_objekt['title']
                     except Exception:
-                        senaste_nyhet = 'Inga färska nyheter'
+                        pass
                     
                     ai_svar = utvärdera_aktie_med_gemini(ticker, senaste_pris, rsi, senaste_nyhet, kassa)
                     
@@ -148,7 +154,6 @@ while True:
                         procent = int(procent_str) if procent_str else 0
                         motivering = delar[2] if len(delar) > 2 else ""
                         
-                        # Ändrat från betyg >= 8 till betyg >= 6 för testning
                         if betyg >= 6 and ticker not in portfölj and kassa >= senaste_pris:
                             köpbelopp = kassa * (procent / 100.0)
                             if köpbelopp < senaste_pris:
