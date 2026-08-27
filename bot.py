@@ -1,6 +1,9 @@
 import warnings
 warnings.filterwarnings("ignore")
 
+import logging
+logging.getLogger('yfinance').setLevel(logging.CRITICAL)
+
 import threading
 import os
 import random
@@ -74,7 +77,7 @@ def beräkna_rsi(data, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi.iloc[-1]
 
-def utvärdera_aktie_med_gemini(ticker, pris, rsi, nyhet_titel, tillgänglig_kassa):
+def utvärdera_aktie_med_gemini(ticker, pris, rsi, tillgänglig_kassa):
     prompt = f"""
     Du är en erfaren och riskmedveten aktiehandlare på Stockholmsbörsen.
     Gör en helhetsbedömning av följande aktie:
@@ -82,11 +85,10 @@ def utvärdera_aktie_med_gemini(ticker, pris, rsi, nyhet_titel, tillgänglig_kas
     - Aktie: {ticker}
     - Aktuellt Pris: {pris:.2f} SEK
     - RSI (14-minuter): {rsi:.2f} (Vägledning: RSI < 30 är översålt/köpläge, RSI > 70 är överköpt/säljläge)
-    - Senaste nyhet: "{nyhet_titel}"
     - Tillgänglig kassa i portföljen: {tillgänglig_kassa:.2f} SEK
 
-    Väg samman BÅDE den tekniska indikatorn (RSI) och nyhetsfundamentan.
-    Sätt ett samlat beslutsbetyg (1-10) samt HUR STOR ANDEL av den tillgängliga kassan (mellan 20% och 100%) som är rimlig att investera baserat på hur stark och säker signalen är.
+    Väg samman den tekniska indikatorn (RSI) och prisnivån.
+    Sätt ett samlat beslutsbetyg (1-10) samt HUR STOR ANDEL av den tillgängliga kassan (mellan 20% och 100%) som är rimlig att investera baserat på hur stark signalen är.
 
     - Betyg 6-10: Köp. Ange allokering i procent (t.ex. 25%, 50% eller 100%).
     - Betyg 4-5: Avvakta. Allokering = 0%.
@@ -104,7 +106,7 @@ def utvärdera_aktie_med_gemini(ticker, pris, rsi, nyhet_titel, tillgänglig_kas
     except Exception as e:
         return f"FEL: {e}"
 
-skicka_telegram_notis(f"🚀 AI-Boten har startats (Testläge: Köp vid betyg >= 6) med {STARTKAPITAL:,.2f} SEK i kassan!")
+skicka_telegram_notis(f"🚀 AI-Boten startad (Testläge: Köp vid betyg >= 6) med {STARTKAPITAL:,.2f} SEK i kassan!")
 print(f"Bot startad på Render! Startkapital: {STARTKAPITAL:,.2f} SEK | Bevakar {len(SVENSKA_AKTIER)} aktier\n", flush=True)
 
 tz = pytz.timezone('Europe/Stockholm')
@@ -121,7 +123,7 @@ while True:
     
     for ticker in SVENSKA_AKTIER:
         try:
-            time.sleep(random.uniform(2.0, 4.0))
+            time.sleep(random.uniform(2.0, 3.5))
             objekt = yf.Ticker(ticker)
             data = objekt.history(period="5d", interval="5m")
             
@@ -133,19 +135,7 @@ while True:
                     df_temp = pd.DataFrame({'Close': df_aktie})
                     rsi = beräkna_rsi(df_temp)
                     
-                    senaste_nyhet = "Inga färska nyheter"
-                    try:
-                        nyheter = objekt.get_news()
-                        if nyheter and len(nyheter) > 0:
-                            farskt_objekt = nyheter[0]
-                            if 'content' in farskt_objekt and 'title' in farskt_objekt['content']:
-                                senaste_nyhet = farskt_objekt['content']['title']
-                            elif 'title' in farskt_objekt:
-                                senaste_nyhet = farskt_objekt['title']
-                    except Exception:
-                        pass
-                    
-                    ai_svar = utvärdera_aktie_med_gemini(ticker, senaste_pris, rsi, senaste_nyhet, kassa)
+                    ai_svar = utvärdera_aktie_med_gemini(ticker, senaste_pris, rsi, kassa)
                     
                     if "BETYG:" in ai_svar and "ALLOKERING:" in ai_svar:
                         delar = ai_svar.split("|")
@@ -199,7 +189,7 @@ while True:
                             skicka_telegram_notis(meddelande)
 
         except Exception as e:
-            time.sleep(5)
+            time.sleep(3)
             continue
 
     time.sleep(300)
