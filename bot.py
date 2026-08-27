@@ -61,7 +61,8 @@ def skicka_telegram_notis(meddelande):
         try:
             url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
             payload = {"chat_id": TELEGRAM_CHAT_ID, "text": meddelande}
-            requests.post(url, data=payload, timeout=5)
+            res = requests.post(url, data=payload, timeout=5)
+            print(f"[Telegram Status]: {res.status_code}", flush=True)
         except Exception as e:
             print(f"Kunde inte skicka Telegram-notis: {e}", flush=True)
 
@@ -79,17 +80,17 @@ def beräkna_rsi(data, period=14):
 
 def utvärdera_aktie_med_gemini(ticker, pris, rsi, tillgänglig_kassa):
     prompt = f"""
-    Du är en erfaren och riskmedveten aktiehandlare på Stockholmsbörsen.
+    Du är en aktiv aktiehandlare på Stockholmsbörsen.
     Gör en helhetsbedömning av följande aktie:
 
     - Aktie: {ticker}
     - Aktuellt Pris: {pris:.2f} SEK
-    - RSI (14-minuter): {rsi:.2f} (Vägledning: RSI < 30 är översålt/köpläge, RSI > 70 är överköpt/säljläge)
+    - RSI (14-minuter): {rsi:.2f}
     - Tillgänglig kassa i portföljen: {tillgänglig_kassa:.2f} SEK
 
-    Väg samman den tekniska indikatorn (RSI) och prisnivån.
-    Sätt ett samlat beslutsbetyg (1-10) samt HUR STOR ANDEL av den tillgängliga kassan (mellan 20% och 100%) som är rimlig att investera baserat på hur stark signalen är.
-
+    TESTLÄGE: Om RSI är under 60, ge BETYG 7 eller högre för att genomföra ett testköp.
+    
+    Regler för svar:
     - Betyg 6-10: Köp. Ange allokering i procent (t.ex. 25%, 50% eller 100%).
     - Betyg 4-5: Avvakta. Allokering = 0%.
     - Betyg 1-3: Sälj. Allokering = 0%.
@@ -106,7 +107,8 @@ def utvärdera_aktie_med_gemini(ticker, pris, rsi, tillgänglig_kassa):
     except Exception as e:
         return f"FEL: {e}"
 
-skicka_telegram_notis(f"🚀 AI-Boten startad (Testläge: Köp vid betyg >= 6) med {STARTKAPITAL:,.2f} SEK i kassan!")
+# Skicka startnotis i Telegram
+skicka_telegram_notis(f"🚀 AI-Boten har startat!\nStartkapital: {STARTKAPITAL:,.2f} SEK\nTestläge aktivt.")
 print(f"Bot startad på Render! Startkapital: {STARTKAPITAL:,.2f} SEK | Bevakar {len(SVENSKA_AKTIER)} aktier\n", flush=True)
 
 tz = pytz.timezone('Europe/Stockholm')
@@ -136,6 +138,7 @@ while True:
                     rsi = beräkna_rsi(df_temp)
                     
                     ai_svar = utvärdera_aktie_med_gemini(ticker, senaste_pris, rsi, kassa)
+                    print(f"[{ticker}] Pris: {senaste_pris:.2f} | RSI: {rsi:.1f} -> AI Svar: {ai_svar}", flush=True)
                     
                     if "BETYG:" in ai_svar and "ALLOKERING:" in ai_svar:
                         delar = ai_svar.split("|")
