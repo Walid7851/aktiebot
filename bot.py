@@ -88,8 +88,8 @@ def utvärdera_aktie_med_gemini(ticker, pris, rsi, nyhet_titel, tillgänglig_kas
     Väg samman BÅDE den tekniska indikatorn (RSI) och nyhetsfundamentan.
     Sätt ett samlat beslutsbetyg (1-10) samt HUR STOR ANDEL av den tillgängliga kassan (mellan 20% och 100%) som är rimlig att investera baserat på hur stark och säker signalen är.
 
-    - Betyg 8-10: Köp. Ange allokering i procent (t.ex. 25%, 50% eller 100%).
-    - Betyg 4-7: Avvakta. Allokering = 0%.
+    - Betyg 6-10: Köp. Ange allokering i procent (t.ex. 25%, 50% eller 100%).
+    - Betyg 4-5: Avvakta. Allokering = 0%.
     - Betyg 1-3: Sälj. Allokering = 0%.
 
     Svara BARA i detta exakta format utan extra tecken:
@@ -104,7 +104,7 @@ def utvärdera_aktie_med_gemini(ticker, pris, rsi, nyhet_titel, tillgänglig_kas
     except Exception as e:
         return f"FEL: {e}"
 
-skicka_telegram_notis(f"🚀 AI-Boten har startats på Render med {STARTKAPITAL:,.2f} SEK i kassan!")
+skicka_telegram_notis(f"🚀 AI-Boten har startats (Testläge: Köp vid betyg >= 6) med {STARTKAPITAL:,.2f} SEK i kassan!")
 print(f"Bot startad på Render! Startkapital: {STARTKAPITAL:,.2f} SEK | Bevakar {len(SVENSKA_AKTIER)} aktier\n", flush=True)
 
 tz = pytz.timezone('Europe/Stockholm')
@@ -148,7 +148,8 @@ while True:
                         procent = int(procent_str) if procent_str else 0
                         motivering = delar[2] if len(delar) > 2 else ""
                         
-                        if betyg >= 8 and ticker not in portfölj and kassa >= senaste_pris:
+                        # Ändrat från betyg >= 8 till betyg >= 6 för testning
+                        if betyg >= 6 and ticker not in portfölj and kassa >= senaste_pris:
                             köpbelopp = kassa * (procent / 100.0)
                             if köpbelopp < senaste_pris:
                                 köpbelopp = senaste_pris
