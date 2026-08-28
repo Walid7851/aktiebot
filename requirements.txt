@@ -1,5 +1,6 @@
-google-genai
+flask
 yfinance
 pandas
 requests
-flask
+pytz
+google-generativeai
