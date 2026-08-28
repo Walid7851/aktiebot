@@ -39,7 +39,7 @@ threading.Thread(target=keep_alive, daemon=True).start()
 
 # ================= INSTÄLLNINGAR =================
 # Klistra in din API-nyckel från Google AI Studio här (måste börja på AIzaSy...)
-GEMINI_API_KEY = "AQ.Ab8RN6Jb3fMR5D3AWjbkMyETNNFUZg5L9iOujobR5SFRGCHiqA"
+GEMINI_API_KEY = "AIzaSyBqbuoOW5hZAjsDv-8SFiOLYTxf8CDVF5c"
 STARTKAPITAL = 200000.0
 
 TELEGRAM_TOKEN = "8977093798:AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
