@@ -7,7 +7,12 @@ logging.getLogger('yfinance').setLevel(logging.CRITICAL)
 import threading
 import os
 import random
+import time
+import requests
+from datetime import datetime
+import pytz
 from flask import Flask
+import google.generativeai as genai
 
 app = Flask(__name__)
 
@@ -21,17 +26,21 @@ def run_flask():
 
 threading.Thread(target=run_flask, daemon=True).start()
 
-import yfinance as yf
-import pandas as pd
-import time
-import requests
-from datetime import datetime
-import pytz
-from google import genai
+def keep_alive():
+    while True:
+        try:
+            requests.get("https://aktiebot.onrender.com", timeout=10)
+            print("[Keep-Alive] Pingade Render.", flush=True)
+        except Exception as e:
+            print(f"[Keep-Alive Fel]: {e}", flush=True)
+        time.sleep(600)
+
+threading.Thread(target=keep_alive, daemon=True).start()
 
 # ================= INSTÄLLNINGAR =================
+# Klistra in din API-nyckel från Google AI Studio här (måste börja på AIzaSy...)
 GEMINI_API_KEY = "AQ.Ab8RN6Jb3fMR5D3AWjbkMyETNNFUZg5L9iOujobR5SFRGCHiqA"
-STARTKAPITAL = 300000.0
+STARTKAPITAL = 200000.0
 
 TELEGRAM_TOKEN = "8977093798:AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
 TELEGRAM_CHAT_ID = "6873331016"
@@ -43,6 +52,12 @@ SVENSKA_AKTIER = [
     "AZN.ST", "ALFA.ST", "BIOA-B.ST", "XVIVO.ST"
 ]
 # =================================================
+
+import yfinance as yf
+import pandas as pd
+
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 def är_börsen_öppen():
     tz = pytz.timezone('Europe/Stockholm')
@@ -66,7 +81,6 @@ def skicka_telegram_notis(meddelande):
         except Exception as e:
             print(f"Kunde inte skicka Telegram-notis: {e}", flush=True)
 
-client = genai.Client(api_key=GEMINI_API_KEY)
 kassa = STARTKAPITAL
 portfölj = {}
 
@@ -99,15 +113,11 @@ def utvärdera_aktie_med_gemini(ticker, pris, rsi, tillgänglig_kassa):
     BETYG: [siffra] | ALLOKERING: [procentsats]% | MOTIVERING: [max 1 kort mening]
     """
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-        )
+        response = model.generate_content(prompt)
         return response.text.strip()
     except Exception as e:
         return f"FEL: {e}"
 
-# Skicka startnotis i Telegram
 skicka_telegram_notis(f"🚀 AI-Boten har startat!\nStartkapital: {STARTKAPITAL:,.2f} SEK\nTestläge aktivt.")
 print(f"Bot startad på Render! Startkapital: {STARTKAPITAL:,.2f} SEK | Bevakar {len(SVENSKA_AKTIER)} aktier\n", flush=True)
 
