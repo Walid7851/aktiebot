@@ -12,13 +12,14 @@ import requests
 from datetime import datetime
 import pytz
 from flask import Flask
-import google.generativeai as genai
+import yfinance as yf
+import pandas as pd
 
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Boten är igång!"
+    return "Krypto-boten är igång 24/7!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -38,38 +39,14 @@ def keep_alive():
 threading.Thread(target=keep_alive, daemon=True).start()
 
 # ================= INSTÄLLNINGAR =================
-# Klistra in din API-nyckel från Google AI Studio här (måste börja på AIzaSy...)
-GEMINI_API_KEY = "AIzaSyBqbuoOW5hZAjsDv-8SFiOLYTxf8CDVF5c"
-STARTKAPITAL = 200000.0
+STARTKAPITAL = 20000.0  # i USD (eller SEK)
 
 TELEGRAM_TOKEN = "8977093798:AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
 TELEGRAM_CHAT_ID = "6873331016"
 
-SVENSKA_AKTIER = [
-    "VOLV-B.ST", "ERIC-B.ST", "INVE-B.ST", "ATCO-A.ST", "HM-B.ST",
-    "SEB-A.ST", "SAND.ST", "EVO.ST", "NIBE-B.ST", "TELIA.ST",
-    "EQT.ST", "SKF-B.ST", "TREL-B.ST", "ASSA-B.ST", "ABB.ST",
-    "AZN.ST", "ALFA.ST", "BIOA-B.ST", "XVIVO.ST"
-]
+# Krypto-par från Yahoo Finance
+KRYPTO_PAR = ["BTC-USD", "LTC-USD"]
 # =================================================
-
-import yfinance as yf
-import pandas as pd
-
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
-
-def är_börsen_öppen():
-    tz = pytz.timezone('Europe/Stockholm')
-    nu = datetime.now(tz)
-    
-    if nu.weekday() >= 5:
-        return False
-    
-    starttid = nu.replace(hour=9, minute=0, second=0, microsecond=0)
-    sluttid = nu.replace(hour=17, minute=30, second=0, microsecond=0)
-    
-    return starttid <= nu <= sluttid
 
 def skicka_telegram_notis(meddelande):
     if TELEGRAM_TOKEN != "" and TELEGRAM_CHAT_ID != "":
@@ -92,117 +69,76 @@ def beräkna_rsi(data, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi.iloc[-1]
 
-def utvärdera_aktie_med_gemini(ticker, pris, rsi, tillgänglig_kassa):
-    prompt = f"""
-    Du är en aktiv aktiehandlare på Stockholmsbörsen.
-    Gör en helhetsbedömning av följande aktie:
-
-    - Aktie: {ticker}
-    - Aktuellt Pris: {pris:.2f} SEK
-    - RSI (14-minuter): {rsi:.2f}
-    - Tillgänglig kassa i portföljen: {tillgänglig_kassa:.2f} SEK
-
-    TESTLÄGE: Om RSI är under 60, ge BETYG 7 eller högre för att genomföra ett testköp.
-    
-    Regler för svar:
-    - Betyg 6-10: Köp. Ange allokering i procent (t.ex. 25%, 50% eller 100%).
-    - Betyg 4-5: Avvakta. Allokering = 0%.
-    - Betyg 1-3: Sälj. Allokering = 0%.
-
-    Svara BARA i detta exakta format utan extra tecken:
-    BETYG: [siffra] | ALLOKERING: [procentsats]% | MOTIVERING: [max 1 kort mening]
-    """
-    try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        return f"FEL: {e}"
-
-skicka_telegram_notis(f"🚀 AI-Boten har startat!\nStartkapital: {STARTKAPITAL:,.2f} SEK\nTestläge aktivt.")
-print(f"Bot startad på Render! Startkapital: {STARTKAPITAL:,.2f} SEK | Bevakar {len(SVENSKA_AKTIER)} aktier\n", flush=True)
+skicka_telegram_notis(f"🪙 Krypto-Boten har startat!\nBevakar: Bitcoin (BTC) & Litecoin (LTC)\nStartkapital: ${STARTKAPITAL:,.2f}")
+print(f"Krypto-bot startad! Startkapital: ${STARTKAPITAL:,.2f} | Bevakar {KRYPTO_PAR}\n", flush=True)
 
 tz = pytz.timezone('Europe/Stockholm')
 
 while True:
-    if not är_börsen_öppen():
-        nu_str = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{nu_str}] Börsen är stängd. Boten pausar i 15 minuter...", flush=True)
-        time.sleep(900)
-        continue
-
     nu = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{nu}] Analyserar marknad via Gemini... (Kassa: {kassa:,.2f} SEK)", flush=True)
+    print(f"[{nu}] Analyserar kryptomarknaden... (Kassa: ${kassa:,.2f})", flush=True)
     
-    for ticker in SVENSKA_AKTIER:
+    for coin in KRYPTO_PAR:
         try:
-            time.sleep(random.uniform(2.0, 3.5))
-            objekt = yf.Ticker(ticker)
-            data = objekt.history(period="5d", interval="5m")
+            time.sleep(random.uniform(1.5, 3.0))
+            objekt = yf.Ticker(coin)
+            data = objekt.history(period="1d", interval="5m")
             
             if not data.empty and 'Close' in data:
-                df_aktie = data['Close'].dropna()
+                df_krypto = data['Close'].dropna()
                 
-                if len(df_aktie) > 15:
-                    senaste_pris = float(df_aktie.iloc[-1])
-                    df_temp = pd.DataFrame({'Close': df_aktie})
+                if len(df_krypto) > 15:
+                    senaste_pris = float(df_krypto.iloc[-1])
+                    df_temp = pd.DataFrame({'Close': df_krypto})
                     rsi = beräkna_rsi(df_temp)
                     
-                    ai_svar = utvärdera_aktie_med_gemini(ticker, senaste_pris, rsi, kassa)
-                    print(f"[{ticker}] Pris: {senaste_pris:.2f} | RSI: {rsi:.1f} -> AI Svar: {ai_svar}", flush=True)
+                    print(f"[{coin}] Pris: ${senaste_pris:,.2f} | RSI: {rsi:.1f}", flush=True)
                     
-                    if "BETYG:" in ai_svar and "ALLOKERING:" in ai_svar:
-                        delar = ai_svar.split("|")
-                        betyg = int(''.join(filter(str.isdigit, delar[0])))
-                        procent_str = ''.join(filter(str.isdigit, delar[1]))
-                        procent = int(procent_str) if procent_str else 0
-                        motivering = delar[2] if len(delar) > 2 else ""
+                    # LOGIK FÖR KÖP / SÄLJ BASERAT PÅ RSI:
+                    # Köpsignal: Översålt (RSI < 35) och vi äger inte coinet än
+                    if rsi < 35 and coin not in portfölj and kassa >= senaste_pris:
+                        köpbelopp = kassa * 0.50  # Köper för 50% av tillgänglig kassa
+                        antal = köpbelopp / senaste_pris
+                        totalt_köp = antal * senaste_pris
                         
-                        if betyg >= 6 and ticker not in portfölj and kassa >= senaste_pris:
-                            köpbelopp = kassa * (procent / 100.0)
-                            if köpbelopp < senaste_pris:
-                                köpbelopp = senaste_pris
-                                
-                            antal = int(köpbelopp // senaste_pris)
-                            totalt_köp = antal * senaste_pris
-                            
-                            if antal > 0 and totalt_köp <= kassa:
-                                kassa -= totalt_köp
-                                portfölj[ticker] = {'antal': antal, 'köppris': senaste_pris}
-                                
-                                meddelande = (
-                                    f"🟢 AUTOMATISKT KÖP: {ticker}\n"
-                                    f"Betyg: {betyg}/10 | Insats: {procent}%\n"
-                                    f"Köpt: {antal} st @ {senaste_pris:.2f} SEK\n"
-                                    f"Totalt: {totalt_köp:,.2f} SEK\n"
-                                    f"Analys: {motivering.strip()}\n"
-                                    f"Kassa kvar: {kassa:,.2f} SEK"
-                                )
-                                print(meddelande, flush=True)
-                                skicka_telegram_notis(meddelande)
+                        kassa -= totalt_köp
+                        portfölj[coin] = {'antal': antal, 'köppris': senaste_pris}
+                        
+                        meddelande = (
+                            f"🟢 AUTOMATISKT KRYPTO-KÖP: {coin}\n"
+                            f"RSI: {rsi:.1f} (Översålt)\n"
+                            f"Köpt: {antal:.4f} st @ ${senaste_pris:,.2f}\n"
+                            f"Totalt: ${totalt_köp:,.2f}\n"
+                            f"Kassa kvar: ${kassa:,.2f}"
+                        )
+                        print(meddelande, flush=True)
+                        skicka_telegram_notis(meddelande)
 
-                        elif betyg <= 3 and ticker in portfölj:
-                            innehav = portfölj[ticker]
-                            antal = innehav['antal']
-                            köppris = innehav['köppris']
-                            totalt_sålt = antal * senaste_pris
-                            vinst = totalt_sålt - (antal * köppris)
-                            
-                            kassa += totalt_sålt
-                            del portfölj[ticker]
-                            
-                            meddelande = (
-                                f"🔴 AUTOMATISK FÖRSÄLJNING: {ticker}\n"
-                                f"Betyg: {betyg}/10\n"
-                                f"Sålt: {antal} st @ {senaste_pris:.2f} SEK\n"
-                                f"Vinst/Förlust: {vinst:+,.2f} SEK\n"
-                                f"Analys: {motivering.strip()}\n"
-                                f"Ny kassa: {kassa:,.2f} SEK"
-                            )
-                            print(meddelande, flush=True)
-                            skicka_telegram_notis(meddelande)
+                    # Säljsignal: Överköpt (RSI > 65) och vi äger coinet
+                    elif rsi > 65 and coin in portfölj:
+                        innehav = portfölj[coin]
+                        antal = innehav['antal']
+                        köppris = innehav['köppris']
+                        totalt_sålt = antal * senaste_pris
+                        vinst = totalt_sålt - (antal * köppris)
+                        
+                        kassa += totalt_sålt
+                        del portfölj[coin]
+                        
+                        meddelande = (
+                            f"🔴 AUTOMATISK KRYPTO-FÖRSÄLJNING: {coin}\n"
+                            f"RSI: {rsi:.1f} (Överköpt)\n"
+                            f"Sålt: {antal:.4f} st @ ${senaste_pris:,.2f}\n"
+                            f"Vinst/Förlust: ${vinst:+,.2f}\n"
+                            f"Ny kassa: ${kassa:,.2f}"
+                        )
+                        print(meddelande, flush=True)
+                        skicka_telegram_notis(meddelande)
 
         except Exception as e:
+            print(f"Fel vid hämtning av {coin}: {e}", flush=True)
             time.sleep(3)
             continue
 
-    time.sleep(300)
+    # Pausa i 3 minuter innan nästa avläsning
+    time.sleep(180)
