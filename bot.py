@@ -39,7 +39,7 @@ def keep_alive():
 threading.Thread(target=keep_alive, daemon=True).start()
 
 # ================= INSTÄLLNINGAR =================
-STARTKAPITAL = 100000.0  # i SEK
+STARTKAPITAL = 350000.0  # i SEK
 TELEGRAM_TOKEN = "8977093798:AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
 TELEGRAM_CHAT_ID = "6873331016"
 
