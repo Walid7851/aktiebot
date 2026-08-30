@@ -19,7 +19,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Krypto-boten med Stop-Loss körs 24/7!"
+    return "Svenska Aktie-Boten körs!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -39,14 +39,22 @@ def keep_alive():
 threading.Thread(target=keep_alive, daemon=True).start()
 
 # ================= INSTÄLLNINGAR =================
-STARTKAPITAL = 20000.0  # i USD
+STARTKAPITAL = 100000.0  # i SEK
 TELEGRAM_TOKEN = "8977093798:AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
 TELEGRAM_CHAT_ID = "6873331016"
 
-KRYPTO_PAR = ["BTC-USD", "LTC-USD"]
+# Dina valda svenska aktier
+AKTIER = [
+    "EQT.ST",         # EQT
+    "SKF-B.ST",       # SKF B
+    "ASSA-B.ST",      # Assa Abloy B
+    "INVE-B.ST",      # Investor B
+    "XVIVO.ST",       # Xvivo Perfusion
+    "BOL.ST"          # Boliden
+]
 
-STOP_LOSS_PROCENT = 0.015    # Sälj om priset faller 1.5% (Skydd mot stor förlust)
-MIN_VINST_PROCENT = 0.008    # Sälj på RSI > 60 bara om vi har minst 0.8% vinst
+STOP_LOSS_PROCENT = 0.015    # Sälj om aktien faller 1.5%
+MIN_VINST_PROCENT = 0.010    # Sälj på RSI > 60 bara om vinsten är minst 1.0%
 # =================================================
 
 def skicka_telegram_notis(meddelande):
@@ -54,7 +62,7 @@ def skicka_telegram_notis(meddelande):
         try:
             url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
             payload = {"chat_id": TELEGRAM_CHAT_ID, "text": meddelande}
-            res = requests.post(url, data=payload, timeout=5)
+            requests.post(url, data=payload, timeout=5)
         except Exception as e:
             print(f"Kunde inte skicka Telegram-notis: {e}", flush=True)
 
@@ -69,88 +77,108 @@ def beräkna_rsi(data, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi.iloc[-1]
 
-skicka_telegram_notis(f"🛡️ Krypto-Bot med Riskhantering startad!\nStop-Loss: 1.5% | Min. Vinst: 0.8%\nKassa: ${STARTKAPITAL:,.2f}")
+def är_börsen_öppen(tz):
+    nu = datetime.now(tz)
+    # 0 = måndag, 4 = fredag
+    if nu.weekday() >= 5:
+        return False
+    
+    start = nu.replace(hour=9, minute=0, second=0, microsecond=0)
+    slut = nu.replace(hour=17, minute=30, second=0, microsecond=0)
+    
+    return start <= nu <= slut
+
+skicka_telegram_notis(f"🇸🇪 Svenska Aktie-Boten startad!\nBevakar: EQT, SKF, ASSA ABLOY, Investor, XVIVO & Boliden\nStartkapital: {STARTKAPITAL:,.2f} SEK")
 
 tz = pytz.timezone('Europe/Stockholm')
 
 while True:
-    nu = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{nu}] Analyserar krypto... (Kassa: ${kassa:,.2f})", flush=True)
+    nu = datetime.now(tz)
+    tid_str = nu.strftime("%Y-%m-%d %H:%M:%S")
     
-    for coin in KRYPTO_PAR:
+    if not är_börsen_öppen(tz):
+        print(f"[{tid_str}] Börsen är stängd (Öppen Mån-Fre 09:00-17:30). Väntar...", flush=True)
+        time.sleep(300)  # Vänta 5 minuter när börsen är stängd
+        continue
+
+    print(f"[{tid_str}] Analyserar aktier... (Kassa: {kassa:,.2f} SEK)", flush=True)
+    
+    for aktie in AKTIER:
         try:
-            time.sleep(random.uniform(1.5, 3.0))
-            objekt = yf.Ticker(coin)
+            time.sleep(random.uniform(1.0, 2.5))
+            objekt = yf.Ticker(aktie)
             data = objekt.history(period="1d", interval="5m")
             
             if not data.empty and 'Close' in data:
-                df_krypto = data['Close'].dropna()
+                df_aktie = data['Close'].dropna()
                 
-                if len(df_krypto) > 15:
-                    senaste_pris = float(df_krypto.iloc[-1])
-                    df_temp = pd.DataFrame({'Close': df_krypto})
+                if len(df_aktie) > 15:
+                    senaste_pris = float(df_aktie.iloc[-1])
+                    df_temp = pd.DataFrame({'Close': df_aktie})
                     rsi = beräkna_rsi(df_temp)
                     
-                    print(f"[{coin}] Pris: ${senaste_pris:,.2f} | RSI: {rsi:.1f}", flush=True)
+                    print(f"[{aktie}] Pris: {senaste_pris:,.2f} SEK | RSI: {rsi:.1f}", flush=True)
                     
-                    # 1. KÖP: RSI är lågt (översålt)
-                    if rsi < 35 and coin not in portfölj and kassa >= senaste_pris:
-                        köpbelopp = kassa * 0.50
-                        antal = köpbelopp / senaste_pris
-                        totalt_köp = antal * senaste_pris
+                    # 1. KÖP: RSI < 35 och vi äger inte aktien
+                    if rsi < 35 and aktie not in portfölj and kassa >= (STARTKAPITAL * 0.20):
+                        köpbelopp = STARTKAPITAL * 0.20  # Köper för max 20% av startkapitalet per aktie
+                        antal = int(köpbelopp / senaste_pris)
                         
-                        kassa -= totalt_köp
-                        portfölj[coin] = {'antal': antal, 'köppris': senaste_pris}
-                        
-                        meddelande = (
-                            f"🟢 AUTOMATISKT KÖP: {coin}\n"
-                            f"RSI: {rsi:.1f}\n"
-                            f"Köpt: {antal:.4f} st @ ${senaste_pris:,.2f}\n"
-                            f"Totalt: ${totalt_köp:,.2f}"
-                        )
-                        print(meddelande, flush=True)
-                        skicka_telegram_notis(meddelande)
+                        if antal > 0:
+                            totalt_köp = antal * senaste_pris
+                            kassa -= totalt_köp
+                            portfölj[aktie] = {'antal': antal, 'köppris': senaste_pris}
+                            
+                            meddelande = (
+                                f"🟢 AUTOMATISKT AKTIEKÖP: {aktie}\n"
+                                f"RSI: {rsi:.1f}\n"
+                                f"Köpt: {antal} st @ {senaste_pris:,.2f} SEK\n"
+                                f"Totalt: {totalt_köp:,.2f} SEK\n"
+                                f"Kassa kvar: {kassa:,.2f} SEK"
+                            )
+                            print(meddelande, flush=True)
+                            skicka_telegram_notis(meddelande)
 
-                    # Om vi äger tillgången – kontrollera Stop-Loss och Vinstsälj
-                    elif coin in portfölj:
-                        innehav = portfölj[coin]
+                    # 2. INNEHAV - KONTROLLERA STOP-LOSS ELLER VINST
+                    elif aktie in portfölj:
+                        innehav = portfölj[aktie]
                         antal = innehav['antal']
                         köppris = innehav['köppris']
                         utveckling = (senaste_pris - köppris) / köppris
                         totalt_sålt = antal * senaste_pris
                         vinst = totalt_sålt - (antal * köppris)
 
-                        # 2. STOP-LOSS: Priset har fallit mer än 1.5% -> Sälj direkt för att begränsa skadan
+                        # Stop-Loss (-1.5%)
                         if utveckling <= -STOP_LOSS_PROCENT:
                             kassa += totalt_sålt
-                            del portfölj[coin]
+                            del portfölj[aktie]
                             meddelande = (
-                                f"🛑 STOP-LOSS UTLÖST: {coin}\n"
+                                f"🛑 STOP-LOSS UTLÖST: {aktie}\n"
                                 f"Nedgång: {utveckling*100:.2f}%\n"
-                                f"Sålt: {antal:.4f} st @ ${senaste_pris:,.2f}\n"
-                                f"Förlust: ${vinst:,.2f}\n"
-                                f"Ny kassa: ${kassa:,.2f}"
+                                f"Sålt: {antal} st @ {senaste_pris:,.2f} SEK\n"
+                                f"Förlust: {vinst:,.2f} SEK\n"
+                                f"Ny kassa: {kassa:,.2f} SEK"
                             )
                             print(meddelande, flush=True)
                             skicka_telegram_notis(meddelande)
 
-                        # 3. VINSTSÄLJ: RSI är högt (överköpt) OCH vi har uppnått vinstkravet (+0.8%)
+                        # Vinstförsäljning (RSI > 60 och minst +1.0% vinst)
                         elif rsi > 60 and utveckling >= MIN_VINST_PROCENT:
                             kassa += totalt_sålt
-                            del portfölj[coin]
+                            del portfölj[aktie]
                             meddelande = (
-                                f"🔴 VINST-FÖRSÄLJNING: {coin}\n"
+                                f"🔴 VINST-FÖRSÄLJNING: {aktie}\n"
                                 f"RSI: {rsi:.1f} | Uppgång: +{utveckling*100:.2f}%\n"
-                                f"Sålt: {antal:.4f} st @ ${senaste_pris:,.2f}\n"
-                                f"Vinst: +${vinst:,.2f}\n"
-                                f"Ny kassa: ${kassa:,.2f}"
+                                f"Sålt: {antal} st @ {senaste_pris:,.2f} SEK\n"
+                                f"Vinst: +{vinst:,.2f} SEK\n"
+                                f"Ny kassa: {kassa:,.2f} SEK"
                             )
                             print(meddelande, flush=True)
                             skicka_telegram_notis(meddelande)
 
         except Exception as e:
-            print(f"Fel vid hämtning av {coin}: {e}", flush=True)
-            time.sleep(3)
+            print(f"Fel vid hämtning av {aktie}: {e}", flush=True)
+            time.sleep(2)
             continue
 
     time.sleep(180)
