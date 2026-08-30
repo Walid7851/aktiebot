@@ -39,7 +39,9 @@ def keep_alive():
 threading.Thread(target=keep_alive, daemon=True).start()
 
 # ================= INSTÄLLNINGAR =================
-STARTKAPITAL = 350000.0  # i SEK
+STARTKAPITAL = 350000.0   # i SEK
+COURTAGE_SEK = 99.0       # Courtage i SEK per transaktion (köp & sälj)
+
 TELEGRAM_TOKEN = "8977093798:AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
 TELEGRAM_CHAT_ID = "6873331016"
 
@@ -54,7 +56,7 @@ AKTIER = [
 ]
 
 STOP_LOSS_PROCENT = 0.015    # Sälj om aktien faller 1.5%
-MIN_VINST_PROCENT = 0.010    # Sälj på RSI > 60 bara om vinsten är minst 1.0%
+MIN_VINST_PROCENT = 0.010    # Sälj på RSI > 60 bara om vinsten efter courtage är minst +1.0%
 # =================================================
 
 def skicka_telegram_notis(meddelande):
@@ -88,7 +90,12 @@ def är_börsen_öppen(tz):
     
     return start <= nu <= slut
 
-skicka_telegram_notis(f"🇸🇪 Svenska Aktie-Boten startad!\nBevakar: EQT, SKF, ASSA ABLOY, Investor, XVIVO & Boliden\nStartkapital: {STARTKAPITAL:,.2f} SEK")
+skicka_telegram_notis(
+    f"🇸🇪 Svenska Aktie-Boten startad!\n"
+    f"Bevakar: EQT, SKF, ASSA ABLOY, Investor, XVIVO & Boliden\n"
+    f"Startkapital: {STARTKAPITAL:,.2f} SEK\n"
+    f"Courtage: {COURTAGE_SEK:.2f} SEK / transaktion"
+)
 
 tz = pytz.timezone('Europe/Stockholm')
 
@@ -121,19 +128,29 @@ while True:
                     
                     # 1. KÖP: RSI < 35 och vi äger inte aktien
                     if rsi < 35 and aktie not in portfölj and kassa >= (STARTKAPITAL * 0.20):
-                        köpbelopp = STARTKAPITAL * 0.20  # Köper för max 20% av startkapitalet per aktie
-                        antal = int(köpbelopp / senaste_pris)
+                        köpbelopp = STARTKAPITAL * 0.20  # Max 20% av startkapitalet per aktie
+                        # Dra av köpcourtage från tillgängligt köpbelopp
+                        effektivt_köpbelopp = köpbelopp - COURTAGE_SEK
+                        antal = int(effektivt_köpbelopp / senaste_pris)
                         
                         if antal > 0:
-                            totalt_köp = antal * senaste_pris
-                            kassa -= totalt_köp
-                            portfölj[aktie] = {'antal': antal, 'köppris': senaste_pris}
+                            aktiekostnad = antal * senaste_pris
+                            totalt_avdrag = aktiekostnad + COURTAGE_SEK
+                            
+                            kassa -= totalt_avdrag
+                            portfölj[aktie] = {
+                                'antal': antal, 
+                                'köppris': senaste_pris,
+                                'total_anskaffning': totalt_avdrag  # Inkl. köpcourtage
+                            }
                             
                             meddelande = (
                                 f"🟢 AUTOMATISKT AKTIEKÖP: {aktie}\n"
                                 f"RSI: {rsi:.1f}\n"
                                 f"Köpt: {antal} st @ {senaste_pris:,.2f} SEK\n"
-                                f"Totalt: {totalt_köp:,.2f} SEK\n"
+                                f"Aktievärde: {aktiekostnad:,.2f} SEK\n"
+                                f"Courtage: {COURTAGE_SEK:.2f} SEK\n"
+                                f"Totalt dragen kassa: {totalt_avdrag:,.2f} SEK\n"
                                 f"Kassa kvar: {kassa:,.2f} SEK"
                             )
                             print(meddelande, flush=True)
@@ -144,33 +161,41 @@ while True:
                         innehav = portfölj[aktie]
                         antal = innehav['antal']
                         köppris = innehav['köppris']
-                        utveckling = (senaste_pris - köppris) / köppris
-                        totalt_sålt = antal * senaste_pris
-                        vinst = totalt_sålt - (antal * köppris)
+                        total_anskaffning = innehav['total_anskaffning']
+                        
+                        brutto_försäljning = antal * senaste_pris
+                        netto_försäljning = brutto_försäljning - COURTAGE_SEK
+                        
+                        # Vinst/förlust efter BÅDA courtagen (köp + sälj)
+                        nettovinst = netto_försäljning - total_anskaffning
+                        utveckling = nettovinst / total_anskaffning
 
-                        # Stop-Loss (-1.5%)
-                        if utveckling <= -STOP_LOSS_PROCENT:
-                            kassa += totalt_sålt
+                        # Stop-Loss (-1.5% på aktiepriset)
+                        prisutveckling = (senaste_pris - köppris) / köppris
+                        if prisutveckling <= -STOP_LOSS_PROCENT:
+                            kassa += netto_försäljning
                             del portfölj[aktie]
                             meddelande = (
                                 f"🛑 STOP-LOSS UTLÖST: {aktie}\n"
-                                f"Nedgång: {utveckling*100:.2f}%\n"
+                                f"Nedgång: {prisutveckling*100:.2f}%\n"
                                 f"Sålt: {antal} st @ {senaste_pris:,.2f} SEK\n"
-                                f"Förlust: {vinst:,.2f} SEK\n"
+                                f"Netto utbetalt (efter säljcourtage): {netto_försäljning:,.2f} SEK\n"
+                                f"Total förlust: {nettovinst:,.2f} SEK\n"
                                 f"Ny kassa: {kassa:,.2f} SEK"
                             )
                             print(meddelande, flush=True)
                             skicka_telegram_notis(meddelande)
 
-                        # Vinstförsäljning (RSI > 60 och minst +1.0% vinst)
+                        # Vinstförsäljning (RSI > 60 och minst +1.0% REN vinst efter båda courtagen)
                         elif rsi > 60 and utveckling >= MIN_VINST_PROCENT:
-                            kassa += totalt_sålt
+                            kassa += netto_försäljning
                             del portfölj[aktie]
                             meddelande = (
                                 f"🔴 VINST-FÖRSÄLJNING: {aktie}\n"
-                                f"RSI: {rsi:.1f} | Uppgång: +{utveckling*100:.2f}%\n"
+                                f"RSI: {rsi:.1f} | Netto vinst: +{utveckling*100:.2f}%\n"
                                 f"Sålt: {antal} st @ {senaste_pris:,.2f} SEK\n"
-                                f"Vinst: +{vinst:,.2f} SEK\n"
+                                f"Netto utbetalt (efter säljcourtage): {netto_försäljning:,.2f} SEK\n"
+                                f"Ren vinst (efter courtage): +{nettovinst:,.2f} SEK\n"
                                 f"Ny kassa: {kassa:,.2f} SEK"
                             )
                             print(meddelande, flush=True)
