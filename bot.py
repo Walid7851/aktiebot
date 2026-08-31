@@ -41,9 +41,8 @@ threading.Thread(target=keep_alive, daemon=True).start()
 
 # ================= INSTÄLLNINGAR =================
 STARTKAPITAL_SEK = 350000.0  # Startkapital i SEK
-
-MIN_COURTAGE_SEK = 1.00       # Minsta courtage i SEK
-COURTAGE_PROCENT = 0.0025     # 0.25% courtage
+FAST_COURTAGE_SEK = 99.00    # Fast courtage på EXAKT 99 SEK per transaktion
+MINSTA_KÖPBELOPP_SEK = 25000.0 # Spärr för att avgiften inte ska äta upp mindre köp
 
 TELEGRAM_TOKEN = "8977093798:AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
 TELEGRAM_CHAT_ID = "6873331016"
@@ -57,8 +56,8 @@ AKTIER_SE = [
     "SECU-B.ST", "HEXA-B.ST", "SWMA.ST", "SAAB-B.ST", "KINV-B.ST"
 ]
 
-STOP_LOSS_PROCENT = 0.030    # Höjt till 3.0% för att tåla brus
-MIN_VINST_PROCENT = 0.015    # Sälj på RSI > 65 om vinsten är minst 1.5%
+STOP_LOSS_PROCENT = 0.030    # Stop-Loss på -3.0%
+MIN_VINST_PROCENT = 0.015    # Sälj på RSI > 65 om ren vinst är minst +1.5% efter båda courtagen
 # =================================================
 
 def skicka_telegram_notis(meddelande):
@@ -82,12 +81,12 @@ def beräkna_rsi(data, period=14):
     return rsi.iloc[-1]
 
 skicka_telegram_notis(
-    f"🇸🇪 Uppdaterad Aktie-Bot igång!\n"
+    f"🇸🇪 Aktie-Bot igång (Fast courtage)!\n"
     f"Kassa: {STARTKAPITAL_SEK:,.2f} SEK\n"
     f"Köpgräns: RSI < 30.0\n"
-    f"Positionsstorlek: Dynamisk (30%–100% av kassan)\n"
-    f"Stop-Loss: -3.0%\n"
-    f"Bevakar: {len(AKTIER_SE)} st aktier"
+    f"Courtage: Fast 99.00 SEK per köp/sälj\n"
+    f"Minsta köp order: {MINSTA_KÖPBELOPP_SEK:,.2f} SEK\n"
+    f"Bevakar: {len(AKTIER_SE)} st svenska aktier"
 )
 
 tz = pytz.timezone('Europe/Stockholm')
@@ -116,22 +115,23 @@ while True:
                         
                         print(f"[{aktie}] Pris: {senaste_pris_sek:,.2f} SEK | RSI: {rsi:.1f}", flush=True)
                         
-                        # 1. KÖP: Strikt RSI < 30.0 (hoppar över allt på 30.1 eller högre)
-                        if rsi < 30.0 and aktie not in portfölj and kassa_sek >= 2000.0:
+                        # 1. KÖP: RSI < 30.0 och vi har minst minsta köpbelopp i kassan
+                        if rsi < 30.0 and aktie not in portfölj and kassa_sek >= MINSTA_KÖPBELOPP_SEK:
                             
-                            # DYNAMISK SKALNING:
-                            # RSI 29.9 ger ~30% av kassan. RSI <= 15 ger 100% av kassan (ALL IN).
+                            # Dynamisk insats baserat på RSI (30% till 100% av kassan)
                             kassa_andel = min(1.0, max(0.30, (30.0 - rsi) / 15.0 * 0.70 + 0.30))
-                            köp_budget_sek = kassa_sek * kassa_andel
+                            köp_budget_sek = max(MINSTA_KÖPBELOPP_SEK, kassa_sek * kassa_andel)
                             
-                            courtage_sek = max(MIN_COURTAGE_SEK, köp_budget_sek * COURTAGE_PROCENT)
-                            netto_köp_sek = köp_budget_sek - courtage_sek
+                            # Om budgeten överstiger tillgänglig kassa, anpassa till kassan
+                            if köp_budget_sek > kassa_sek:
+                                köp_budget_sek = kassa_sek
                             
+                            netto_köp_sek = köp_budget_sek - FAST_COURTAGE_SEK
                             antal = int(netto_köp_sek // senaste_pris_sek)
                             
                             if antal > 0:
                                 faktiskt_köp_sek = antal * senaste_pris_sek
-                                total_kostnad_sek = faktiskt_köp_sek + courtage_sek
+                                total_kostnad_sek = faktiskt_köp_sek + FAST_COURTAGE_SEK
                                 
                                 kassa_sek -= total_kostnad_sek
                                 portfölj[aktie] = {
@@ -141,10 +141,11 @@ while True:
                                 }
                                 
                                 meddelande = (
-                                    f"🟢 AUTOMATISKT KÖP: {aktie}\n"
+                                    f"🟢 AUTOMATISKT AKTIEKÖP: {aktie}\n"
                                     f"RSI: {rsi:.1f} (Investerar {kassa_andel*100:.0f}% av kassan)\n"
                                     f"Köpt: {antal} st @ {senaste_pris_sek:,.2f} SEK\n"
-                                    f"Courtage: {courtage_sek:,.2f} SEK\n"
+                                    f"Aktievärde: {faktiskt_köp_sek:,.2f} SEK\n"
+                                    f"Courtage: {FAST_COURTAGE_SEK:.2f} SEK\n"
                                     f"Totalt dragen kassa: {total_kostnad_sek:,.2f} SEK\n"
                                     f"Kassa kvar: {kassa_sek:,.2f} SEK"
                                 )
@@ -159,8 +160,7 @@ while True:
                             totalt_sek_betalt = innehav['totalt_sek_betalt']
                             
                             brutto_sek = antal * senaste_pris_sek
-                            sälj_courtage_sek = max(MIN_COURTAGE_SEK, brutto_sek * COURTAGE_PROCENT)
-                            netto_utbetalat_sek = brutto_sek - sälj_courtage_sek
+                            netto_utbetalat_sek = brutto_sek - FAST_COURTAGE_SEK
                             
                             ren_vinst_sek = netto_utbetalat_sek - totalt_sek_betalt
                             avkastning_procent = ren_vinst_sek / totalt_sek_betalt
@@ -172,16 +172,17 @@ while True:
                                 kassa_sek += netto_utbetalat_sek
                                 del portfölj[aktie]
                                 meddelande = (
-                                    f"🛑 STOP-LOSS: {aktie}\n"
-                                    f"Utveckling: {prisutveckling*100:.2f}%\n"
+                                    f"🛑 STOP-LOSS UTLÖST: {aktie}\n"
+                                    f"Nedgång: {prisutveckling*100:.2f}%\n"
                                     f"Sålt: {antal} st @ {senaste_pris_sek:,.2f} SEK\n"
-                                    f"Netto förlust: {ren_vinst_sek:,.2f} SEK\n"
+                                    f"Netto utbetalt (efter säljcourtage): {netto_utbetalat_sek:,.2f} SEK\n"
+                                    f"Total förlust: {ren_vinst_sek:,.2f} SEK\n"
                                     f"Ny kassa: {kassa_sek:,.2f} SEK"
                                 )
                                 print(meddelande, flush=True)
                                 skicka_telegram_notis(meddelande)
 
-                            # Vinstförsäljning (RSI > 65 och minst +1.5% vinst)
+                            # Vinstförsäljning (RSI > 65 och minst +1.5% REN vinst efter båda courtagen)
                             elif rsi > 65 and avkastning_procent >= MIN_VINST_PROCENT:
                                 kassa_sek += netto_utbetalat_sek
                                 del portfölj[aktie]
@@ -189,7 +190,7 @@ while True:
                                     f"🔴 VINST-FÖRSÄLJNING: {aktie}\n"
                                     f"RSI: {rsi:.1f} | Netto vinst: +{avkastning_procent*100:.2f}%\n"
                                     f"Sålt: {antal} st @ {senaste_pris_sek:,.2f} SEK\n"
-                                    f"Ren vinst: +{ren_vinst_sek:,.2f} SEK\n"
+                                    f"Ren vinst (efter courtage): +{ren_vinst_sek:,.2f} SEK\n"
                                     f"Ny kassa: {kassa_sek:,.2f} SEK"
                                 )
                                 print(meddelande, flush=True)
