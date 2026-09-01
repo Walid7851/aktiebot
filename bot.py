@@ -49,11 +49,11 @@ TELEGRAM_CHAT_ID = "6873331016"
 
 AKTIER_SE = [
     "VOLV-B.ST", "INVE-B.ST", "SEB-A.ST", "SHB-A.ST", "SWED-A.ST",
-    "ERIC-B.ST", "HM-B.ST", "AZN.ST", "ASSA-B.ST", "ATCO-A.ST",
-    "ATCO-B.ST", "SAND.ST", "SKF-B.ST", "TELIA.ST", "EVO.ST",
-    "ALFA.ST", "ABB.ST", "BOL.ST", "SCA-B.ST", "ESSITY-B.ST",
-    "NIBE-B.ST", "SINCH.ST", "GETI-B.ST", "LUND-B.ST", "EPI-A.ST",
-    "SECU-B.ST", "HEXA-B.ST", "SWMA.ST", "SAAB-B.ST", "KINV-B.ST"
+    "ERIC-B.ST", "AZN.ST", "ASSA-B.ST", "ATCO-A.ST", "EQT.ST",
+    "SAND.ST", "SKF-B.ST", "TELIA.ST", "EVO.ST", "ALFA.ST",
+    "ABB.ST", "BOL.ST", "SCA-B.ST", "ESSITY-B.ST", "NIBE-B.ST",
+    "SINCH.ST", "GETI-B.ST", "LUND-B.ST", "EPI-A.ST", "SECU-B.ST",
+    "HEXA-B.ST", "SWMA.ST", "SAAB-B.ST", "KINV-B.ST", "BIOA-B.ST"
 ]
 
 STOP_LOSS_PROCENT = 0.030    # Stop-Loss på -3.0%
