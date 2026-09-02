@@ -30,8 +30,8 @@ threading.Thread(target=run_flask, daemon=True).start()
 def keep_alive():
     while True:
         try:
-            # Byt ut URL:en mot din Render-URL
-            requests.get("https://din-svenska-bot.onrender.com", timeout=10)
+            # Rätt URL till din Render-app
+            requests.get("https://aktiebot.onrender.com", timeout=10)
             print("[Keep-Alive] Pingade Render.", flush=True)
         except Exception as e:
             print(f"[Keep-Alive Fel]: {e}", flush=True)
@@ -40,9 +40,9 @@ def keep_alive():
 threading.Thread(target=keep_alive, daemon=True).start()
 
 # ================= INSTÄLLNINGAR =================
-STARTKAPITAL_SEK = 350000.0  # Startkapital i SEK
+STARTKAPITAL_SEK = 350000.0  # Ursprungligt startkapital i SEK
 FAST_COURTAGE_SEK = 99.00    # Fast courtage på EXAKT 99 SEK per transaktion
-MINSTA_KÖPBELOPP_SEK = 25000.0 # Spärr för att avgiften inte ska äta upp mindre köp
+MINSTA_KÖPBELOPP_SEK = 25000.0 # Spärr för mindre köp
 
 TELEGRAM_TOKEN = "8977093798:AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
 TELEGRAM_CHAT_ID = "6873331016"
@@ -69,8 +69,22 @@ def skicka_telegram_notis(meddelande):
         except Exception as e:
             print(f"Kunde inte skicka Telegram-notis: {e}", flush=True)
 
-kassa_sek = STARTKAPITAL_SEK
-portfölj = {}
+# ---------------- BEFINTLIGT INNEHAV (VOLVO B) ----------------
+VOLVO_ANTAL = 1012
+VOLVO_KÖPPRIS = 345.50
+VOLVO_TOTALT_BETALT = (VOLVO_ANTAL * VOLVO_KÖPPRIS) + FAST_COURTAGE_SEK  # 349 742 SEK
+
+# Justera startkassan med dragen köpeskilling
+kassa_sek = STARTKAPITAL_SEK - VOLVO_TOTALT_BETALT  # Återstår: 258.00 SEK
+
+portfölj = {
+    "VOLV-B.ST": {
+        'antal': VOLVO_ANTAL,
+        'köppris_sek': VOLVO_KÖPPRIS,
+        'totalt_sek_betalt': VOLVO_TOTALT_BETALT
+    }
+}
+# -------------------------------------------------------------
 
 def beräkna_rsi(data, period=14):
     delta = data['Close'].diff()
@@ -81,11 +95,11 @@ def beräkna_rsi(data, period=14):
     return rsi.iloc[-1]
 
 skicka_telegram_notis(
-    f"🇸🇪 Aktie-Bot igång (Fast courtage)!\n"
-    f"Kassa: {STARTKAPITAL_SEK:,.2f} SEK\n"
+    f"🇸🇪 Aktie-Bot igång (Innehav laddat)!\n"
+    f"Kassa: {kassa_sek:,.2f} SEK\n"
+    f"Befintligt innehav: 1 012 st VOLV-B.ST @ {VOLVO_KÖPPRIS:.2f} SEK\n"
     f"Köpgräns: RSI < 30.0\n"
     f"Courtage: Fast 99.00 SEK per köp/sälj\n"
-    f"Minsta köp order: {MINSTA_KÖPBELOPP_SEK:,.2f} SEK\n"
     f"Bevakar: {len(AKTIER_SE)} st svenska aktier"
 )
 
@@ -101,7 +115,9 @@ while True:
         
         for aktie in AKTIER_SE:
             try:
-                time.sleep(random.uniform(0.5, 1.2))
+                # Ökad väntetid mellan aktier (2.5 till 4.0 sek) för att undvika Rate Limit
+                time.sleep(random.uniform(2.5, 4.0))
+                
                 objekt = yf.Ticker(aktie)
                 data = objekt.history(period="1d", interval="5m")
                 
@@ -115,14 +131,12 @@ while True:
                         
                         print(f"[{aktie}] Pris: {senaste_pris_sek:,.2f} SEK | RSI: {rsi:.1f}", flush=True)
                         
-                        # 1. KÖP: RSI < 30.0 och vi har minst minsta köpbelopp i kassan
+                        # 1. KÖP: RSI < 30.0 och tillräcklig kassa
                         if rsi < 30.0 and aktie not in portfölj and kassa_sek >= MINSTA_KÖPBELOPP_SEK:
                             
-                            # Dynamisk insats baserat på RSI (30% till 100% av kassan)
                             kassa_andel = min(1.0, max(0.30, (30.0 - rsi) / 15.0 * 0.70 + 0.30))
                             köp_budget_sek = max(MINSTA_KÖPBELOPP_SEK, kassa_sek * kassa_andel)
                             
-                            # Om budgeten överstiger tillgänglig kassa, anpassa till kassan
                             if köp_budget_sek > kassa_sek:
                                 köp_budget_sek = kassa_sek
                             
@@ -182,7 +196,7 @@ while True:
                                 print(meddelande, flush=True)
                                 skicka_telegram_notis(meddelande)
 
-                            # Vinstförsäljning (RSI > 65 och minst +1.5% REN vinst efter båda courtagen)
+                            # Vinstförsäljning (RSI > 65 och minst +1.5% REN vinst efter courtage)
                             elif rsi > 65 and avkastning_procent >= MIN_VINST_PROCENT:
                                 kassa_sek += netto_utbetalat_sek
                                 del portfölj[aktie]
@@ -197,11 +211,17 @@ while True:
                                 skicka_telegram_notis(meddelande)
 
             except Exception as e:
-                print(f"Fel vid hämtning av {aktie}: {e}", flush=True)
-                time.sleep(1)
+                err_msg = str(e)
+                print(f"Fel vid hämtning av {aktie}: {err_msg}", flush=True)
+                if "Too Many Requests" in err_msg or "Rate limited" in err_msg:
+                    print("⚠️ Yahoo Finance Rate Limit upptäckt! Pausar boten i 3 minuter...", flush=True)
+                    time.sleep(180)
+                else:
+                    time.sleep(2)
                 continue
 
-        time.sleep(180)
+        # Vänta 5 minuter mellan svepen
+        time.sleep(300)
     else:
         print(f"[{nu.strftime('%Y-%m-%d %H:%M:%S')}] Svenska börsen är stängd. Väntar...", flush=True)
         time.sleep(900)
