@@ -45,7 +45,12 @@ FAST_COURTAGE_SEK = 99.00    # Fast courtage på EXAKT 99 SEK per transaktion
 MINSTA_KÖPBELOPP_SEK = 25000.0 # Spärr för mindre köp
 
 TELEGRAM_TOKEN = "8977093798:AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
-TELEGRAM_CHAT_ID = "6873331016"
+
+# Mottagare: Din privata chatt + Din NYA Svenska Grupp
+CHAT_IDS = [
+    "6873331016",
+    "-5144451427"
+]
 
 AKTIER_SE = [
     "VOLV-B.ST", "INVE-B.ST", "SEB-A.ST", "SHB-A.ST", "SWED-A.ST",
@@ -60,14 +65,16 @@ STOP_LOSS_PROCENT = 0.030    # Stop-Loss på -3.0%
 MIN_VINST_PROCENT = 0.015    # Sälj på RSI > 65 om ren vinst är minst +1.5% efter båda courtagen
 # =================================================
 
+# Multi-recipient notifiering
 def skicka_telegram_notis(meddelande):
-    if TELEGRAM_TOKEN != "" and TELEGRAM_CHAT_ID != "":
-        try:
-            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-            payload = {"chat_id": TELEGRAM_CHAT_ID, "text": meddelande}
-            requests.post(url, data=payload, timeout=5)
-        except Exception as e:
-            print(f"Kunde inte skicka Telegram-notis: {e}", flush=True)
+    if TELEGRAM_TOKEN and CHAT_IDS:
+        for chat_id in CHAT_IDS:
+            try:
+                url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+                payload = {"chat_id": chat_id, "text": meddelande}
+                requests.post(url, data=payload, timeout=5)
+            except Exception as e:
+                print(f"Kunde inte skicka Telegram-notis till {chat_id}: {e}", flush=True)
 
 # ---------------- BEFINTLIGT INNEHAV (VOLVO B) ----------------
 VOLVO_ANTAL = 1012
@@ -155,7 +162,7 @@ while True:
                                 }
                                 
                                 meddelande = (
-                                    f"🟢 AUTOMATISKT AKTIEKÖP: {aktie}\n"
+                                    f"🟢 AUTOMATISKT AKTIEKÖP (Sverige): {aktie}\n"
                                     f"RSI: {rsi:.1f} (Investerar {kassa_andel*100:.0f}% av kassan)\n"
                                     f"Köpt: {antal} st @ {senaste_pris_sek:,.2f} SEK\n"
                                     f"Aktievärde: {faktiskt_köp_sek:,.2f} SEK\n"
@@ -186,7 +193,7 @@ while True:
                                 kassa_sek += netto_utbetalat_sek
                                 del portfölj[aktie]
                                 meddelande = (
-                                    f"🛑 STOP-LOSS UTLÖST: {aktie}\n"
+                                    f"🛑 STOP-LOSS UTLÖST (Sverige): {aktie}\n"
                                     f"Nedgång: {prisutveckling*100:.2f}%\n"
                                     f"Sålt: {antal} st @ {senaste_pris_sek:,.2f} SEK\n"
                                     f"Netto utbetalt (efter säljcourtage): {netto_utbetalat_sek:,.2f} SEK\n"
@@ -201,7 +208,7 @@ while True:
                                 kassa_sek += netto_utbetalat_sek
                                 del portfölj[aktie]
                                 meddelande = (
-                                    f"🔴 VINST-FÖRSÄLJNING: {aktie}\n"
+                                    f"🔴 VINST-FÖRSÄLJNING (Sverige): {aktie}\n"
                                     f"RSI: {rsi:.1f} | Netto vinst: +{avkastning_procent*100:.2f}%\n"
                                     f"Sålt: {antal} st @ {senaste_pris_sek:,.2f} SEK\n"
                                     f"Ren vinst (efter courtage): +{ren_vinst_sek:,.2f} SEK\n"
