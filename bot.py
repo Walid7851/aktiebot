@@ -30,7 +30,7 @@ threading.Thread(target=run_flask, daemon=True).start()
 def keep_alive():
     while True:
         try:
-            # Rätt URL till din Render-app
+            # URL till din Render-app
             requests.get("https://aktiebot.onrender.com", timeout=10)
             print("[Keep-Alive] Pingade Render.", flush=True)
         except Exception as e:
@@ -40,13 +40,13 @@ def keep_alive():
 threading.Thread(target=keep_alive, daemon=True).start()
 
 # ================= INSTÄLLNINGAR =================
-STARTKAPITAL_SEK = 350000.0  # Ursprungligt startkapital i SEK
-FAST_COURTAGE_SEK = 99.00    # Fast courtage på EXAKT 99 SEK per transaktion
+STARTKAPITAL_SEK = 350000.0  # Startkapital i SEK
+FAST_COURTAGE_SEK = 99.00    # Fast courtage på 99 SEK per transaktion
 MINSTA_KÖPBELOPP_SEK = 25000.0 # Spärr för mindre köp
 
 TELEGRAM_TOKEN = "8977093798:AAF_vJxuAGRSzw_XNUAj9vf6JLIcEKzDFBc"
 
-# Mottagare: Din privata chatt + Din NYA Svenska Grupp
+# Mottagare: Din privata chatt + Din Svenska Grupp
 CHAT_IDS = [
     "6873331016",
     "-5144451427"
@@ -76,22 +76,9 @@ def skicka_telegram_notis(meddelande):
             except Exception as e:
                 print(f"Kunde inte skicka Telegram-notis till {chat_id}: {e}", flush=True)
 
-# ---------------- BEFINTLIGT INNEHAV (VOLVO B) ----------------
-VOLVO_ANTAL = 1012
-VOLVO_KÖPPRIS = 345.50
-VOLVO_TOTALT_BETALT = (VOLVO_ANTAL * VOLVO_KÖPPRIS) + FAST_COURTAGE_SEK  # 349 742 SEK
-
-# Justera startkassan med dragen köpeskilling
-kassa_sek = STARTKAPITAL_SEK - VOLVO_TOTALT_BETALT  # Återstår: 258.00 SEK
-
-portfölj = {
-    "VOLV-B.ST": {
-        'antal': VOLVO_ANTAL,
-        'köppris_sek': VOLVO_KÖPPRIS,
-        'totalt_sek_betalt': VOLVO_TOTALT_BETALT
-    }
-}
-# -------------------------------------------------------------
+# Initialisera kassa och tom portfölj
+kassa_sek = STARTKAPITAL_SEK
+portfölj = {}
 
 def beräkna_rsi(data, period=14):
     delta = data['Close'].diff()
@@ -102,9 +89,8 @@ def beräkna_rsi(data, period=14):
     return rsi.iloc[-1]
 
 skicka_telegram_notis(
-    f"🇸🇪 Aktie-Bot igång (Innehav laddat)!\n"
+    f"🇸🇪 Aktie-Bot startad!\n"
     f"Kassa: {kassa_sek:,.2f} SEK\n"
-    f"Befintligt innehav: 1 012 st VOLV-B.ST @ {VOLVO_KÖPPRIS:.2f} SEK\n"
     f"Köpgräns: RSI < 30.0\n"
     f"Courtage: Fast 99.00 SEK per köp/sälj\n"
     f"Bevakar: {len(AKTIER_SE)} st svenska aktier"
@@ -122,7 +108,7 @@ while True:
         
         for aktie in AKTIER_SE:
             try:
-                # Ökad väntetid mellan aktier (2.5 till 4.0 sek) för att undvika Rate Limit
+                # Fördröjning mellan anrop för att undvika Rate Limit
                 time.sleep(random.uniform(2.5, 4.0))
                 
                 objekt = yf.Ticker(aktie)
